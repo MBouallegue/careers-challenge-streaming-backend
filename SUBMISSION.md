@@ -1,8 +1,8 @@
 # Submission — Real-time Streaming Backend
 
-**Your name:** _(fill in)_
-**Email:** _(fill in)_
-**Link to your fork or solution:** _(fill in)_
+**Your name:** Mohamed Bouallegue
+**Email:** mohamedboualllegue@gmail.com
+**Link to your fork or solution:** [link](https://github.com/MBouallegue/careers-challenge-streaming-backend)
 
 ---
 
