@@ -1,5 +1,10 @@
-# Tooling for load generation, verification and linting. Not needed to run the
-# service; `pip install -r requirements.txt` is sufficient for that.
+# Tooling for load generation, verification and linting.
+# Not needed to run the service: `pip install -r requirements.txt` is enough.
+
 -r requirements.txt
+
+# client/loadgen.py: pooled keep-alive connections and the SSE subscriber that
+# measures true end-to-end alarm latency.
 aiohttp>=3.9
+
 ruff>=0.6

@@ -1,3 +1,16 @@
-# Python 3.9+ (Django 4.2 LTS is the last line supporting 3.9).
-Django>=4.2,<5.0
+# Runtime dependencies. Python 3.11+ (3.13 is what this was developed and
+# measured on; 3.11 is the floor for the typing syntax used in engine/).
+#
+# Lower bounds rather than exact pins: this is a service, not a library, and
+# these are the versions the results in docs/BENCHMARKS.md were produced with.
+
+Django>=5.0,<6.0
+djangorestframework>=3.15
+
+# Async DRF views. DRF's own APIView dispatches synchronously, which would put
+# read handlers on Django's thread pool while the engine's drain loop mutates
+# state on the event loop. That is a data race, not a performance question, so
+# async views are a correctness requirement here rather than a preference.
+adrf>=0.1.9
+
 uvicorn>=0.27

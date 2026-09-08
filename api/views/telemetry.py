@@ -29,6 +29,8 @@ class DeviceHealthView(APIView):
     as a missing endpoint.
     """
 
+    http_method_names = ["get", "options"]
+
     async def get(self, request, device_id: str):
         health = engine.devices.health(device_id, _now_ms())
         return Response(DeviceHealthSerializer(health).data)
@@ -42,6 +44,8 @@ class RoomOccupancyView(APIView):
     transitions. The window is recomputed per request from the retained
     timeline, which is what makes a late replay repair history for free.
     """
+
+    http_method_names = ["get", "options"]
 
     async def get(self, request, room_id: str):
         window_ms = parse_window_ms(

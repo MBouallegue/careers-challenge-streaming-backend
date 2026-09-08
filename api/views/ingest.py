@@ -25,7 +25,13 @@ class EventIngestView(View):
 
     Returns ``202 Accepted``: the event is durable in the write-ahead log and
     queued for aggregation, though the aggregates may not reflect it yet.
+
+    The allowed methods are declared rather than left implicit. Django already
+    answers 405 for any verb without a handler, so this adds no behaviour; it
+    states the contract in one place next to the handler that implements it.
     """
+
+    http_method_names = ["post", "options"]
 
     async def post(self, request):
         status, body = await ingest_body(request.body)

@@ -1,20 +1,27 @@
 """DRF serializers for the read surface.
 
-A note on where serializers are and are not used, because it is a deliberate
-asymmetry rather than an oversight.
+These are **output allowlists, not validators**, and the distinction is the
+whole reason they exist.
 
-Response shapes go through serializers: they are the API contract, they are
-read by another team's client, and they are queried at human rates. Declaring
-them here means the contract is one artefact rather than a set of dict literals
-scattered across views.
+They perform no validation: there is no ``validate()`` here and ``is_valid()``
+is never called. Inbound events are validated in ``engine.events``, which is the
+single source of truth for the acceptance rules — ``POST /events`` is the only
+path that runs on every event in the fleet, and a serializer instantiation per
+event costs roughly an order of magnitude more than that hand-written validator.
+Defining the same rules a second time here would be slower *and* would give them
+somewhere to drift apart.
 
-Inbound events do NOT go through a serializer. ``POST /events`` is the only path
-that runs on all ~50,000 events per second the brief asks for, and instantiating
-a serializer per event costs roughly an order of magnitude more than the
-hand-written validator in ``engine.events``. That validator is also the single
-source of truth for the acceptance rules, so routing ingest through a second,
-slower definition of the same rules would risk them drifting apart. The event
-schema is documented in ``docs/event_schema.md`` and enforced there.
+What they do buy is that a serializer emits **only its declared fields**. The
+engine's internal dicts carry bookkeeping the API must never leak — ``ts_ms``,
+``seq_min``/``seq_max``, the ``rx`` receive timestamp. Passing responses through
+a declared field set means adding an internal field to an engine structure
+cannot silently publish it, which a hand-built dict literal in a view does not
+guarantee. It also keeps the response contract in one file rather than scattered
+across view bodies.
+
+The cost is one marshalling pass per response. On endpoints queried at human
+rates that is a good trade; on ingest it would not be, which is why ingest does
+not use them.
 """
 
 from __future__ import annotations
@@ -25,7 +32,6 @@ __all__ = [
     "AlarmPageSerializer",
     "AlarmSerializer",
     "DeviceHealthSerializer",
-    "IngestResultSerializer",
     "RoomOccupancySerializer",
 ]
 
@@ -90,14 +96,3 @@ class AlarmPageSerializer(serializers.Serializer):
     count = serializers.IntegerField()
     cursor = serializers.IntegerField(help_text="Highest cursor currently in the feed.")
     since = serializers.CharField(allow_null=True)
-
-
-class IngestResultSerializer(serializers.Serializer):
-    """Per-request ingest outcome. Batches report counts rather than failing whole."""
-
-    ok = serializers.BooleanField()
-    accepted = serializers.IntegerField()
-    rejected = serializers.IntegerField()
-    reason = serializers.CharField(
-        allow_null=True, help_text="First rejection reason in the batch, if any."
-    )

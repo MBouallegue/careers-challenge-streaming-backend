@@ -42,6 +42,8 @@ class AlarmListView(APIView):
     feed instead of nothing.
     """
 
+    http_method_names = ["get", "options"]
+
     async def get(self, request):
         raw_since = request.query_params.get("since")
         kind, value = parse_since(raw_since)
@@ -90,6 +92,8 @@ class AlarmStreamView(View):
     header that an ``EventSource`` sends automatically on reconnect. The header
     wins, so a browser reconnect resumes exactly with no client code.
     """
+
+    http_method_names = ["get", "options"]
 
     async def get(self, request):
         header_cursor = request.headers.get("Last-Event-ID")

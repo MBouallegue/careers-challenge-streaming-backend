@@ -17,12 +17,16 @@ PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 class LivenessView(APIView):
     """The process is up. Deliberately does not touch engine state."""
 
+    http_method_names = ["get", "options"]
+
     async def get(self, request):
         return Response({"ok": True})
 
 
 class ReadinessView(APIView):
     """The process is up and the ingest queue depth is visible to the caller."""
+
+    http_method_names = ["get", "options"]
 
     async def get(self, request):
         return Response({"ok": True, "queue_depth": engine.queue.size})
@@ -31,12 +35,16 @@ class ReadinessView(APIView):
 class StatsView(APIView):
     """Everything an operator wants during a burst, in one request."""
 
+    http_method_names = ["get", "options"]
+
     async def get(self, request):
         return Response(engine.stats())
 
 
 class MetricsView(APIView):
     """Prometheus text exposition."""
+
+    http_method_names = ["get", "options"]
 
     async def get(self, request):
         engine.stats()  # refresh gauges before rendering

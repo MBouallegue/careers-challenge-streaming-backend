@@ -49,8 +49,12 @@ against captured wire data in a unit test, with no server running.
 
 Django was chosen for the delivery layer and is used where it pays:
 
-- **The read API** is DRF: declared serializers are the contract, and those
-  endpoints are queried at human rates so per-request cost is noise.
+- **The read API** is DRF. The serializers are output *allowlists*, not
+  validators: a serializer emits only its declared fields, so an internal field
+  added to an engine structure (``ts_ms``, ``seq_min``, the ``rx`` receive
+  timestamp) cannot silently leak into a response, which a hand-built dict in a
+  view body does not guarantee. Those endpoints are queried at human rates, so
+  the marshalling pass is free.
 - **The alarm record** is a Django model with a migration. A fall is a clinical
   record someone will query months later, join against a resident and annotate.
   That is a relational database's job.
@@ -62,7 +66,8 @@ It is *not* used in two places, both measured rather than assumed:
 1. **Event validation is not a DRF serializer.** A serializer instantiation per
    event costs roughly an order of magnitude more than the validator in
    `engine/events.py`, and ingest is the only path that runs on every event in
-   the fleet.
+   the fleet. Defining the acceptance rules a second time in a serializer would
+   also give them somewhere to drift apart.
 2. **`POST /events` is a raw ASGI route**, mounted ahead of Django in
    `config/asgi.py`. Django's request/response cycle costs about 1.2 ms per
    request. Fine for a read endpoint; it is the entire ingest ceiling when the
