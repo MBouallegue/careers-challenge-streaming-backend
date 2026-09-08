@@ -70,6 +70,8 @@ class StreamingEngine:
         self.recovery: dict[str, Any] = {}
 
         self._sample_counter = 0
+        self._backpressure_since: float | None = None
+        self._last_report: tuple[float, int, int] = (time.time(), 0, 0)
         self._waiters: list[asyncio.Future[None]] = []
         self._tasks: list[asyncio.Task[None]] = []
         self._wake: asyncio.Event | None = None
@@ -118,6 +120,11 @@ class StreamingEngine:
             "alarms": len(self.alarms),
             "duration_ms": int((time.time() - started) * 1000),
         }
+        if replayed["skipped"]:
+            logger.warning(
+                "recovery skipped %d torn WAL record(s) - expected after a hard kill",
+                replayed["skipped"],
+            )
         return self.recovery
 
     def _apply_replayed(self, event: Any) -> None:
@@ -133,6 +140,7 @@ class StreamingEngine:
             loop.create_task(self._drain_loop(), name="engine.drain"),
             loop.create_task(self._fsync_loop(), name="engine.fsync"),
             loop.create_task(self._snapshot_loop(), name="engine.snapshot"),
+            loop.create_task(self._report_loop(), name="engine.report"),
         ]
 
     async def stop(self) -> None:
@@ -196,6 +204,14 @@ class StreamingEngine:
             return
 
         metrics.increment("backpressure_waits_total")
+        if self._backpressure_since is None:
+            # Transition, not per-request: at high water this fires thousands of
+            # times a second, and an operator needs the edge, not the volume.
+            self._backpressure_since = time.time()
+            logger.warning(
+                "backpressure engaged: queue=%d high_water=%d - delaying acks, not shedding",
+                self.queue.size, self.config.queue_high_water,
+            )
         waiter: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         self._waiters.append(waiter)
         try:
@@ -207,6 +223,15 @@ class StreamingEngine:
                 self._waiters.remove(waiter)
 
     def _release_waiters(self) -> None:
+        if self.queue.size <= self.config.queue_low_water and self._backpressure_since is not None:
+            logger.info(
+                "backpressure relieved after %.1fs: queue=%d low_water=%d",
+                time.time() - self._backpressure_since,
+                self.queue.size,
+                self.config.queue_low_water,
+            )
+            self._backpressure_since = None
+
         if not self._waiters or self.queue.size > self.config.queue_low_water:
             return
         for waiter in self._waiters:
@@ -288,6 +313,17 @@ class StreamingEngine:
             if received_ms is not None:
                 metrics.alarm_latency.observe(published_at - received_ms)
 
+        for alarm in created:
+            # A fall is the clinically significant event in this system. One
+            # line each is affordable (falls are ~1% of traffic) and it is what
+            # an on-call engineer greps for when a care team asks "did the
+            # system see it?".
+            logger.info(
+                "fall alarm room=%s device=%s ts=%s confidence=%s cursor=%d duplicates=%d",
+                alarm["room_id"], alarm["device_id"], alarm["ts"],
+                alarm["confidence"], alarm["cursor"], alarm["duplicates_collapsed"],
+            )
+
         self.alarms.publish(created)
         metrics.increment("alarms_published_total", len(created))
 
@@ -332,6 +368,36 @@ class StreamingEngine:
                 self.wal.flush()
             except OSError:
                 logger.exception("WAL flush failed")
+
+    async def _report_loop(self) -> None:
+        """One operational summary line per interval.
+
+        Deliberately a rate rather than a total: "we are taking 4,800 events/sec
+        and the queue is flat" is actionable, "we have accepted 12,904,331
+        events" is not. Silent while idle so it does not bury real events.
+        """
+        interval = self.config.report_ms / 1000
+        while self._running:
+            await asyncio.sleep(interval)
+            previous_time, previous_accepted, previous_rejected = self._last_report
+            elapsed = max(1e-6, time.time() - previous_time)
+            accepted = self.accepted - previous_accepted
+            rejected = self.rejected - previous_rejected
+            self._last_report = (time.time(), self.accepted, self.rejected)
+
+            if accepted == 0 and rejected == 0:
+                continue
+
+            latency = metrics.alarm_latency.quantiles((0.95,))["p95"]
+            logger.info(
+                "ingest %.0f/s (rejected %.0f/s) queue=%d [falls=%d state=%d telemetry=%d] "
+                "alarms=%d dedup_collapsed=%d alarm_p95=%sms wal=%.1fMB subscribers=%d",
+                accepted / elapsed, rejected / elapsed, self.queue.size,
+                self.queue.depth(0), self.queue.depth(1), self.queue.depth(2),
+                len(self.alarms), self.alarms.duplicates_collapsed,
+                latency if latency is not None else "-",
+                self.wal.bytes_written / 1e6, len(self.alarms.subscribers),
+            )
 
     async def _snapshot_loop(self) -> None:
         interval = self.config.snapshot_ms / 1000

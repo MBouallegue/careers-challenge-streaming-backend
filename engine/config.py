@@ -82,6 +82,10 @@ class EngineConfig:
     # --- Live feed ----------------------------------------------------------
     sse_heartbeat_ms: int = 15_000
 
+    # --- Observability ------------------------------------------------------
+    #: Interval for the periodic operational summary log line.
+    report_ms: int = 30_000
+
     @classmethod
     def from_env(cls) -> EngineConfig:
         """Build a configuration from the process environment."""
@@ -103,6 +107,7 @@ class EngineConfig:
             snapshot_ms=_env_int("SNAPSHOT_MS", 10_000),
             wal_segment_bytes=_env_int("WAL_SEGMENT_BYTES", 64 * 1024 * 1024),
             sse_heartbeat_ms=_env_int("SSE_HEARTBEAT_MS", 15_000),
+            report_ms=_env_int("REPORT_MS", 30_000),
         )
 
     def evolve(self, **changes) -> EngineConfig:

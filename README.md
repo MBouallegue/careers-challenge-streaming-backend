@@ -179,6 +179,7 @@ All environment variables, all optional.
 | `QUEUE_HIGH_WATER` | `200000` | begin delaying acknowledgements |
 | `MAX_ACK_DELAY_MS` | `4000` | cap on ack delay (client timeout is 5 s) |
 | `ALARM_DB_MIRROR` | `1` | mirror alarms to the relational store |
+| `REPORT_MS` | `30000` | operational summary log interval |
 | `LOG_LEVEL` | `INFO` | |
 
 ## Notes for the reviewer
