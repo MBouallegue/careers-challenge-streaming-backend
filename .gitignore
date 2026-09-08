@@ -13,3 +13,12 @@ build/
 .env
 .env.local
 data/snapshots/
+
+# service runtime state
+data/
+*.tmp
+
+# solution runtime + tooling
+data-restart-check/
+.ruff_cache/
+*.sqlite3

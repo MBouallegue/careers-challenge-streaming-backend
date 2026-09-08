@@ -1,0 +1,5 @@
+# Tooling for load generation, verification and linting. Not needed to run the
+# service; `pip install -r requirements.txt` is sufficient for that.
+-r requirements.txt
+aiohttp>=3.9
+ruff>=0.6
